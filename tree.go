@@ -73,12 +73,19 @@ const (
 
 type node struct {
 	path      string
-	indices   string
+	indices   []byte
 	wildChild bool
 	nType     nodeType
 	priority  uint32
 	children  []*node
 	handle    Handle
+}
+
+func concat(a ...[]byte) (out []byte) {
+	for _, i := range a {
+		out = append(out, i...)
+	}
+	return
 }
 
 // Increments priority of the given child and reorders if necessary
@@ -97,9 +104,9 @@ func (n *node) incrementChildPrio(pos int) int {
 
 	// Build new index char string
 	if newPos != pos {
-		n.indices = n.indices[:newPos] + // Unchanged prefix, might be empty
-			n.indices[pos:pos+1] + // The index char we move
-			n.indices[newPos:pos] + n.indices[pos+1:] // Rest without char at 'pos'
+		n.indices = concat(n.indices[:newPos], // Unchanged prefix, might be empty
+			n.indices[pos:pos+1],                     // The index char we move
+			n.indices[newPos:pos], n.indices[pos+1:]) // Rest without char at 'pos'
 	}
 
 	return newPos
@@ -139,7 +146,7 @@ walk:
 
 			n.children = []*node{&child}
 			// []byte for proper unicode char conversion, see #65
-			n.indices = string([]byte{n.path[i]})
+			n.indices = []byte{n.path[i]}
 			n.path = path[:i]
 			n.handle = nil
 			n.wildChild = false
@@ -196,7 +203,7 @@ walk:
 			// Otherwise insert it
 			if idxc != ':' && idxc != '*' {
 				// []byte for proper unicode char conversion, see #65
-				n.indices += string([]byte{idxc})
+				n.indices = append(n.indices, []byte{idxc}...)
 				child := &node{}
 				n.children = append(n.children, child)
 				n.incrementChildPrio(len(n.indices) - 1)
@@ -296,7 +303,7 @@ func (n *node) insertChild(path, fullPath string, handle Handle) {
 				nType:     catchAll,
 			}
 			n.children = []*node{child}
-			n.indices = string('/')
+			n.indices = []byte{'/'}
 			n = child
 			n.priority++
 

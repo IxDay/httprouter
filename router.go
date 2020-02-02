@@ -316,10 +316,10 @@ func (r *Router) Handle(method, path string, handle Handle) {
 		root = new(node)
 		r.trees[method] = root
 
-		r.globalAllowed = r.allowed("*", "")
+		r.globalAllowed = r.allowed([]byte{'*'}, "")
 	}
 
-	root.addRoute(path, handle)
+	root.addRoute([]byte(path), handle)
 
 	// Update maxParams
 	if paramsCount := countParams(path); paramsCount+varsCount > r.maxParams {
@@ -393,7 +393,7 @@ func (r *Router) recv(w http.ResponseWriter, req *http.Request) {
 // the same path with an extra / without the trailing slash should be performed.
 func (r *Router) Lookup(method, path string) (Handle, Params, bool) {
 	if root := r.trees[method]; root != nil {
-		handle, ps, tsr := root.getValue(path, r.getParams)
+		handle, ps, tsr := root.getValue([]byte(path), r.getParams)
 		if handle == nil {
 			r.putParams(ps)
 			return nil, nil, tsr
@@ -406,10 +406,10 @@ func (r *Router) Lookup(method, path string) (Handle, Params, bool) {
 	return nil, nil, false
 }
 
-func (r *Router) allowed(path, reqMethod string) (allow string) {
+func (r *Router) allowed(path []byte, reqMethod string) (allow string) {
 	allowed := make([]string, 0, 9)
 
-	if path == "*" { // server-wide
+	if len(path) == 1 && path[0] == '*' { // server-wide
 		// empty method is used for internal calls to refresh the cache
 		if reqMethod == "" {
 			for method := range r.trees {
@@ -462,7 +462,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		defer r.recv(w, req)
 	}
 
-	path := req.URL.Path
+	path := []byte(req.URL.Path)
 
 	if root := r.trees[req.Method]; root != nil {
 		if handle, ps, tsr := root.getValue(path, r.getParams); handle != nil {
@@ -473,7 +473,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				handle(w, req, nil)
 			}
 			return
-		} else if req.Method != http.MethodConnect && path != "/" {
+		} else if req.Method != http.MethodConnect && (len(path) > 1 || (len(path) == 1 && path[0] != '/')) {
 			// Moved Permanently, request with GET method
 			code := http.StatusMovedPermanently
 			if req.Method != http.MethodGet {
@@ -483,9 +483,9 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 			if tsr && r.RedirectTrailingSlash {
 				if len(path) > 1 && path[len(path)-1] == '/' {
-					req.URL.Path = path[:len(path)-1]
+					req.URL.Path = string(path[:len(path)-1])
 				} else {
-					req.URL.Path = path + "/"
+					req.URL.Path = string(path) + "/"
 				}
 				http.Redirect(w, req, req.URL.String(), code)
 				return
@@ -494,7 +494,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 			// Try to fix the request path
 			if r.RedirectFixedPath {
 				fixedPath, found := root.findCaseInsensitivePath(
-					CleanPath(path),
+					CleanPathB(path),
 					r.RedirectTrailingSlash,
 				)
 				if found {

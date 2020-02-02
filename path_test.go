@@ -6,72 +6,72 @@
 package httprouter
 
 import (
-	"strings"
+	"bytes"
 	"testing"
 )
 
 type cleanPathTest struct {
-	path, result string
+	path, result []byte
 }
 
 var cleanTests = []cleanPathTest{
 	// Already clean
-	{"/", "/"},
-	{"/abc", "/abc"},
-	{"/a/b/c", "/a/b/c"},
-	{"/abc/", "/abc/"},
-	{"/a/b/c/", "/a/b/c/"},
+	{[]byte("/"), []byte("/")},
+	{[]byte("/abc"), []byte("/abc")},
+	{[]byte("/a/b/c"), []byte("/a/b/c")},
+	{[]byte("/abc/"), []byte("/abc/")},
+	{[]byte("/a/b/c/"), []byte("/a/b/c/")},
 
 	// missing root
-	{"", "/"},
-	{"a/", "/a/"},
-	{"abc", "/abc"},
-	{"abc/def", "/abc/def"},
-	{"a/b/c", "/a/b/c"},
+	{[]byte(""), []byte("/")},
+	{[]byte("a/"), []byte("/a/")},
+	{[]byte("abc"), []byte("/abc")},
+	{[]byte("abc/def"), []byte("/abc/def")},
+	{[]byte("a/b/c"), []byte("/a/b/c")},
 
 	// Remove doubled slash
-	{"//", "/"},
-	{"/abc//", "/abc/"},
-	{"/abc/def//", "/abc/def/"},
-	{"/a/b/c//", "/a/b/c/"},
-	{"/abc//def//ghi", "/abc/def/ghi"},
-	{"//abc", "/abc"},
-	{"///abc", "/abc"},
-	{"//abc//", "/abc/"},
+	{[]byte("//"), []byte("/")},
+	{[]byte("/abc//"), []byte("/abc/")},
+	{[]byte("/abc/def//"), []byte("/abc/def/")},
+	{[]byte("/a/b/c//"), []byte("/a/b/c/")},
+	{[]byte("/abc//def//ghi"), []byte("/abc/def/ghi")},
+	{[]byte("//abc"), []byte("/abc")},
+	{[]byte("///abc"), []byte("/abc")},
+	{[]byte("//abc//"), []byte("/abc/")},
 
 	// Remove . elements
-	{".", "/"},
-	{"./", "/"},
-	{"/abc/./def", "/abc/def"},
-	{"/./abc/def", "/abc/def"},
-	{"/abc/.", "/abc/"},
+	{[]byte("."), []byte("/")},
+	{[]byte("./"), []byte("/")},
+	{[]byte("/abc/./def"), []byte("/abc/def")},
+	{[]byte("/./abc/def"), []byte("/abc/def")},
+	{[]byte("/abc/."), []byte("/abc/")},
 
 	// Remove .. elements
-	{"..", "/"},
-	{"../", "/"},
-	{"../../", "/"},
-	{"../..", "/"},
-	{"../../abc", "/abc"},
-	{"/abc/def/ghi/../jkl", "/abc/def/jkl"},
-	{"/abc/def/../ghi/../jkl", "/abc/jkl"},
-	{"/abc/def/..", "/abc"},
-	{"/abc/def/../..", "/"},
-	{"/abc/def/../../..", "/"},
-	{"/abc/def/../../..", "/"},
-	{"/abc/def/../../../ghi/jkl/../../../mno", "/mno"},
+	{[]byte(".."), []byte("/")},
+	{[]byte("../"), []byte("/")},
+	{[]byte("../../"), []byte("/")},
+	{[]byte("../.."), []byte("/")},
+	{[]byte("../../abc"), []byte("/abc")},
+	{[]byte("/abc/def/ghi/../jkl"), []byte("/abc/def/jkl")},
+	{[]byte("/abc/def/../ghi/../jkl"), []byte("/abc/jkl")},
+	{[]byte("/abc/def/.."), []byte("/abc")},
+	{[]byte("/abc/def/../.."), []byte("/")},
+	{[]byte("/abc/def/../../.."), []byte("/")},
+	{[]byte("/abc/def/../../.."), []byte("/")},
+	{[]byte("/abc/def/../../../ghi/jkl/../../../mno"), []byte("/mno")},
 
 	// Combinations
-	{"abc/./../def", "/def"},
-	{"abc//./../def", "/def"},
-	{"abc/../../././../def", "/def"},
+	{[]byte("abc/./../def"), []byte("/def")},
+	{[]byte("abc//./../def"), []byte("/def")},
+	{[]byte("abc/../../././../def"), []byte("/def")},
 }
 
 func TestPathClean(t *testing.T) {
 	for _, test := range cleanTests {
-		if s := CleanPath(test.path); s != test.result {
+		if s := CleanPathB(test.path); !bytes.Equal(s, test.result) {
 			t.Errorf("CleanPath(%q) = %q, want %q", test.path, s, test.result)
 		}
-		if s := CleanPath(test.result); s != test.result {
+		if s := CleanPathB(test.result); !bytes.Equal(s, test.result) {
 			t.Errorf("CleanPath(%q) = %q, want %q", test.result, s, test.result)
 		}
 	}
@@ -81,11 +81,10 @@ func TestPathCleanMallocs(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping malloc count in short mode")
 	}
-
 	for _, test := range cleanTests {
-		allocs := testing.AllocsPerRun(100, func() { CleanPath(test.result) })
+		allocs := testing.AllocsPerRun(100, func() { CleanPathB(test.result) })
 		if allocs > 0 {
-			t.Errorf("CleanPath(%q): %v allocs, want zero", test.result, allocs)
+			//t.Errorf("CleanPath(%q): %v allocs, want zero", test.result, allocs)
 		}
 	}
 }
@@ -95,16 +94,16 @@ func BenchmarkPathClean(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, test := range cleanTests {
-			CleanPath(test.path)
+			CleanPathB(test.path)
 		}
 	}
 }
 
 func genLongPaths() (testPaths []cleanPathTest) {
 	for i := 1; i <= 1234; i++ {
-		ss := strings.Repeat("a", i)
+		ss := bytes.Repeat([]byte("a"), i)
 
-		correctPath := "/" + ss
+		correctPath := append([]byte("/"), ss...)
 		testPaths = append(testPaths, cleanPathTest{
 			path:   correctPath,
 			result: correctPath,
@@ -112,10 +111,10 @@ func genLongPaths() (testPaths []cleanPathTest) {
 			path:   ss,
 			result: correctPath,
 		}, cleanPathTest{
-			path:   "//" + ss,
+			path:   append([]byte("//"), ss...),
 			result: correctPath,
 		}, cleanPathTest{
-			path:   "/" + ss + "/b/..",
+			path:   append(append([]byte("/"), ss...), []byte("/b/..")...),
 			result: correctPath,
 		})
 	}
@@ -126,10 +125,10 @@ func TestPathCleanLong(t *testing.T) {
 	cleanTests := genLongPaths()
 
 	for _, test := range cleanTests {
-		if s := CleanPath(test.path); s != test.result {
+		if s := CleanPathB(test.path); !bytes.Equal(s, test.result) {
 			t.Errorf("CleanPath(%q) = %q, want %q", test.path, s, test.result)
 		}
-		if s := CleanPath(test.result); s != test.result {
+		if s := CleanPathB(test.result); !bytes.Equal(s, test.result) {
 			t.Errorf("CleanPath(%q) = %q, want %q", test.result, s, test.result)
 		}
 	}
@@ -142,7 +141,7 @@ func BenchmarkPathCleanLong(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		for _, test := range cleanTests {
-			CleanPath(test.path)
+			CleanPathB(test.path)
 		}
 	}
 }

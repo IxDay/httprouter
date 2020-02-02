@@ -250,13 +250,13 @@ func BenchmarkAllowed(b *testing.B) {
 	b.Run("Global", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			_ = router.allowed("*", http.MethodOptions)
+			_ = router.allowed([]byte("*"), http.MethodOptions)
 		}
 	})
 	b.Run("Path", func(b *testing.B) {
 		b.ReportAllocs()
 		for i := 0; i < b.N; i++ {
-			_ = router.allowed("/path", http.MethodOptions)
+			_ = router.allowed([]byte("/path"), http.MethodOptions)
 		}
 	})
 }

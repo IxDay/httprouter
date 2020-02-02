@@ -19,11 +19,17 @@ package httprouter
 //
 // If the result of this process is an empty string, "/" is returned
 func CleanPath(p string) string {
+	return string(CleanPathB([]byte(p)))
+}
+
+var slash = []byte{'/'}
+
+func CleanPathB(p []byte) []byte {
 	const stackBufSize = 128
 
 	// Turn empty string into "/"
-	if p == "" {
-		return "/"
+	if len(p) == 0 {
+		return slash
 	}
 
 	// Reasonably sized buffer on stack to avoid allocations in the common case.
@@ -120,12 +126,12 @@ func CleanPath(p string) string {
 	if len(buf) == 0 {
 		return p[:w]
 	}
-	return string(buf[:w])
+	return buf[:w]
 }
 
 // Internal helper to lazily create a buffer if necessary.
 // Calls to this function get inlined.
-func bufApp(buf *[]byte, s string, w int, c byte) {
+func bufApp(buf *[]byte, s []byte, w int, c byte) {
 	b := *buf
 	if len(b) == 0 {
 		// No modification of the original string so far.
